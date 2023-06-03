@@ -1,0 +1,60 @@
+name: Mount Image Partition
+description: An action that mounts an image partition.
+author: Jorge Capona
+
+branding:
+  icon: file
+  color: blue
+
+inputs:
+  imagePath:
+    description: "Path to image file."
+    required: true
+  mountPoint:
+    description: "Mount point. Defaults to '/mnt/'."
+    required: false
+    default: "/mnt/"
+  partitionIndex:
+    description: "Partition index in image. Defaults to 1."
+    required: false
+    default: "1"
+  filesystem:
+    description: "Partition filesystem. Defaults to 'ext4'."
+    required: false
+    default: "ext4"
+
+outputs:
+  deviceMapper:
+    description: "Device mapper for mounted partition."
+    value: ${{ steps.mount-image.outputs.deviceMapper }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: mount-image
+      shell: bash
+      run: |
+        imagePath=${{ inputs.imagePath }}
+        mountPoint=${{ inputs.mountPoint }}
+        partitionIndex=${{ inputs.partitionIndex }}
+        filesystem=${{ inputs.filesystem }}
+        echo Attempting to mount partition $partitionIndex of $imagePath in $mountPoint
+
+        kpartx="$(sudo kpartx -avs $imagePath)" || echo 1>&2 "ERROR: could not create loop devices for image"
+        blockDevices=($(grep -o 'loop.p.' <<<"$kpartx"))
+        echo Block devices: $blockDevices
+        sleep 0.5
+
+        device=/dev/mapper/${blockDevices[$partitionIndex]}
+        echo Using device $device
+
+        sudo mkdir -p $mountPoint || echo 1>&2 "ERROR: could not create the partition's mount directory $mountPoint"
+        echo Attempting to mount partition in $mountPoint
+        sudo mount -t $filesystem $device $mountPoint || echo 1>&2 "ERROR: could not mount device to $mountPoint"
+
+        echo Mounted Image Details:
+        df -h $mountPoint | sed -e "s#$(pwd)/##" || echo 1>&2 "ERROR: could not inspect mounted partition at $mountPoint"
+
+        echo Filesystem in $mountPoint: && ls -la $mountPoint
+
+        echo "::set-output name=deviceMapper::/dev/mapper/${blockDevices[$partitionIndex]}"
