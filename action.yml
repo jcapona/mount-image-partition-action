@@ -56,5 +56,4 @@ runs:
         df -h $mountPoint | sed -e "s#$(pwd)/##" || echo 1>&2 "ERROR: could not inspect mounted partition at $mountPoint"
 
         echo Filesystem in $mountPoint: && ls -la $mountPoint
-
-        echo "::set-output name=deviceMapper::/dev/mapper/${blockDevices[$partitionIndex]}"
+        echo "deviceMapper=/dev/mapper/${blockDevices[$partitionIndex]}" >> $GITHUB_OUTPUT

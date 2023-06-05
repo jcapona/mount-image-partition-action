@@ -13,7 +13,7 @@ An action that mounts an image partition. Based on [damianperera/mount-image-act
 ```
 - name: Mount root partition
   id: mount-root
-  uses: jcapona/mount-image-partition@v0.1
+  uses: jcapona/mount-image-partition-action@v0.2
   with:
     imagePath: image_file.img
     mountPoint: /tmp/img
@@ -22,7 +22,7 @@ An action that mounts an image partition. Based on [damianperera/mount-image-act
 
 - name: Mount boot partition
   id: mount-boot
-  uses: jcapona/mount-image-partition@v0.1
+  uses: jcapona/mount-image-partition-action@v0.2
   with:
     imagePath: image_file.img
     mountPoint: /tmp/img/boot
