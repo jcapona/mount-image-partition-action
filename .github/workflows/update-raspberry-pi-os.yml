@@ -1,0 +1,55 @@
+name: Update Raspberry Pi OS image
+
+on:
+  workflow_dispatch:
+
+env:
+  DOWNLOAD_URL: "https://downloads.raspberrypi.org/raspios_lite_armhf/images/raspios_lite_armhf-2023-05-03/2023-05-03-raspios-bullseye-armhf-lite.img.xz"
+  MOUNT_POINT: "/tmp/rpi-os"
+  PACKAGES_FOLDER: "packages"
+
+jobs:
+  update-image:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: GitHub Environment Variables Action
+        uses: FranzDiebold/github-env-vars-action@v2.7.0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
+            qemu-user-static \
+            systemd-container \
+            wget \
+            xz-utils
+
+      - name: Download OS image
+        run: |
+          wget "${{ env.DOWNLOAD_URL }}" -O OS.xz
+          unxz OS.xz
+
+      - name: Get OS image filename
+        run: |
+          echo "IMAGE_FILE=$(find . -iname '*.img' | head -n1)" >> $GITHUB_ENV
+
+      - name: Mount OS Image root partition
+        uses: jcapona/mount-image-partition-action@v0.2
+        with:
+          imagePath: ${{ env.IMAGE_FILE }}
+          mountPoint: ${{ env.MOUNT_POINT }}
+          partitionIndex: 1
+          filesystem: ext4
+
+      - name: Update OS container and download packages
+        run: |
+          sudo systemd-nspawn --pipe -D "${{ env.MOUNT_POINT }}" /bin/bash << EOF
+            apt update
+            apt dist-upgrade -y
+          EOF
+
+      - name: Upload updated OS image
+        uses: actions/upload-artifact@v3
+        with:
+          name: image
+          path: |
+            ${{ env.IMAGE_FILE }}
