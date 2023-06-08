@@ -26,11 +26,11 @@ jobs:
       - name: Download OS image
         run: |
           wget "${{ env.DOWNLOAD_URL }}" -O OS.xz
-          unxz OS.xz
+          unxz --verbose OS.xz
 
       - name: Get OS image filename
         run: |
-          echo "IMAGE_FILE=$(find . -iname '*.img' | head -n1)" >> $GITHUB_ENV
+          echo "IMAGE_FILE=$(find . -name 'OS' | head -n1)" >> $GITHUB_ENV
 
       - name: Mount OS Image root partition
         uses: jcapona/mount-image-partition-action@v0.2
