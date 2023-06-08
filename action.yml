@@ -34,14 +34,17 @@ runs:
     - id: mount-image
       shell: bash
       run: |
+        sudo apt update
+        DEBIAN_FRONTEND=noninteractive sudo apt install -y kpartx
+
         imagePath=${{ inputs.imagePath }}
         mountPoint=${{ inputs.mountPoint }}
         partitionIndex=${{ inputs.partitionIndex }}
         filesystem=${{ inputs.filesystem }}
         echo Attempting to mount partition $partitionIndex of $imagePath in $mountPoint
 
-        kpartx="$(sudo kpartx -avs $imagePath)" || echo 1>&2 "ERROR: could not create loop devices for image"
-        blockDevices=($(grep -o 'loop.p.' <<<"$kpartx"))
+        kpartxMap="$(sudo kpartx -avs $imagePath)" || echo 1>&2 "ERROR: could not create loop devices for image"
+        blockDevices=($(grep -o 'loop.p.' <<<"$kpartxMap"))
         echo Block devices: $blockDevices
         sleep 0.5
 
