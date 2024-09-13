@@ -1,5 +1,5 @@
 name: Mount Image Partition
-description: An action that mounts an image partition.
+description: An action that mounts an image partition inside a Ubuntu runner.
 author: Jorge Capona
 
 branding:
@@ -18,15 +18,18 @@ inputs:
     description: "Partition index in image. Defaults to 1."
     required: false
     default: "1"
-  filesystem:
-    description: "Partition filesystem. Defaults to 'ext4'."
+  extraDiskSpace:
+    description: "Extra disk space to add to the partition in MiB. Defaults to 0 MiB."
     required: false
-    default: "ext4"
+    default: "0"
 
 outputs:
-  deviceMapper:
-    description: "Device mapper for mounted partition."
-    value: ${{ steps.mount-image.outputs.deviceMapper }}
+  loopbackDevice:
+    description: "Loopback device associated to mounted partition."
+    value: ${{ steps.mount-image.outputs.loopbackDevice }}
+  imagePath:
+    description: "Path to mounted image. Might be different to the input image path if extra disk space was added."
+    value: ${{ steps.mount-image.outputs.imagePath }}
 
 runs:
   using: "composite"
@@ -34,29 +37,60 @@ runs:
     - id: mount-image
       shell: bash
       run: |
-        sudo apt update
-        DEBIAN_FRONTEND=noninteractive sudo apt install -y kpartx
-
-        imagePath=${{ inputs.imagePath }}
+        originalImagePath=${{ inputs.imagePath }}
         mountPoint=${{ inputs.mountPoint }}
         partitionIndex=${{ inputs.partitionIndex }}
-        filesystem=${{ inputs.filesystem }}
-        echo Attempting to mount partition $partitionIndex of $imagePath in $mountPoint
+        extraDiskSpace=${{ inputs.extraDiskSpace }}
+        export PATH=$PATH:/sbin
 
-        kpartxMap="$(sudo kpartx -avs $imagePath)" || echo 1>&2 "ERROR: could not create loop devices for image"
-        blockDevices=($(grep -o 'loop.p.' <<<"$kpartxMap"))
-        echo Block devices: $blockDevices
-        sleep 0.5
+        imagePath=$originalImagePath
+        if [ "${extraDiskSpace}" -ne 0 ]; then
+          # If extra disk space will be added, copy the image file to a temporary location
+          # to avoid modifying the original file
+          imagePath=$(mktemp -d)/image.img
+          echo "Copying image file from ${originalImagePath} to ${imagePath}"
+          cp "${originalImagePath}" "${imagePath}"
+        fi
 
-        device=/dev/mapper/${blockDevices[$partitionIndex]}
-        echo Using device $device
+        echo "Partitions in image file:"
+        fdisk -l $imagePath
 
-        sudo mkdir -p $mountPoint || echo 1>&2 "ERROR: could not create the partition's mount directory $mountPoint"
-        echo Attempting to mount partition in $mountPoint
-        sudo mount -t $filesystem $device $mountPoint || echo 1>&2 "ERROR: could not mount device to $mountPoint"
+        sectorSize=$(fdisk -l $imagePath | grep "Sector size" | awk '{print $4}')
+        echo "Sector size: ${sectorSize}"
 
-        echo Mounted Image Details:
-        df -h $mountPoint | sed -e "s#$(pwd)/##" || echo 1>&2 "ERROR: could not inspect mounted partition at $mountPoint"
+        partitionData=$(sudo fdisk -l $imagePath | grep -E "^$imagePath[0-9]"  | sed -n "${partitionIndex}p")
+        echo "Partition data: ${partitionData}"
 
-        echo Filesystem in $mountPoint: && ls -la $mountPoint
-        echo "deviceMapper=/dev/mapper/${blockDevices[$partitionIndex]}" >> $GITHUB_OUTPUT
+        startOffset=$(echo $partitionData | awk '{print $2}')
+        startOffsetBytes=$((sectorSize * startOffset))
+        echo "Start offset: $startOffset; $startOffsetBytes bytes"
+
+        if [ "${extraDiskSpace}" -ne 0 ]; then
+          echo "Appending "${extraDiskSpace}" MiB of empty space to the partition"
+          dd if=/dev/zero bs=1MiB of="${imagePath}" conv=notrunc oflag=append seek="${startOffset}" count="${extraDiskSpace}"
+        fi
+
+        echo "Attempting to mount partition ${partitionIndex} of ${imagePath} in ${mountPoint}"
+
+        sudo mkdir -p "${mountPoint}" || echo 1>&2 "ERROR: could not create the partition's mount directory $mountPoint"
+        sudo mount -o loop,offset="${startOffsetBytes}" "${imagePath}" "${mountPoint}" || echo 1>&2 "ERROR: could not mount device to $mountPoint"
+
+        loopbackDevice=$(sudo losetup -j "${imagePath}" | awk -F: '{print $1}')
+        echo "Associated loopback device: ${loopbackDevice}"
+
+        if [ "${extraDiskSpace}" -ne 0 ]; then
+          echo "Before resizing partition:"
+          df -h "${mountPoint}" | sed -e "s#$(pwd)/##" || echo 1>&2 "ERROR: could not inspect mounted partition at $mountPoint"
+
+          sudo losetup -c "${loopbackDevice}" || echo 1>&2 "ERROR: could not update loopback device ${loopbackDevice}"
+          sudo resize2fs "${loopbackDevice}" || echo 1>&2 "ERROR: could not resize filesystem on ${loopbackDevice}"
+        fi
+
+        echo "Mounted Image Details:"
+        df -h "${mountPoint}" | sed -e "s#$(pwd)/##" || echo 1>&2 "ERROR: could not inspect mounted partition at $mountPoint"
+
+        echo "Filesystem in ${mountPoint}:"
+        ls -hla "${mountPoint}"
+
+        echo "loopbackDevice=$loopbackDevice" >> $GITHUB_OUTPUT
+        echo "imagePath=$imagePath" >> $GITHUB_OUTPUT
