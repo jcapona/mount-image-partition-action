@@ -33,12 +33,11 @@ jobs:
           echo "IMAGE_FILE=$(find . -iname '*.img' | head -n1)" >> $GITHUB_ENV
 
       - name: Mount OS Image root partition
-        uses: jcapona/mount-image-partition-action@v0.3
+        uses: jcapona/mount-image-partition-action@v1.0
         with:
           imagePath: ${{ env.IMAGE_FILE }}
           mountPoint: ${{ env.MOUNT_POINT }}
-          partitionIndex: 1
-          filesystem: ext4
+          partitionIndex: 2
 
       - name: Update OS container and download packages
         run: |

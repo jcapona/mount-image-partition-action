@@ -15,7 +15,7 @@ inputs:
     required: false
     default: "/mnt/"
   partitionIndex:
-    description: "Partition index in image. Defaults to 1."
+    description: "Partition index in image, starting from 1. Defaults to 1."
     required: false
     default: "1"
   extraDiskSpace:
@@ -42,6 +42,10 @@ runs:
         partitionIndex=${{ inputs.partitionIndex }}
         extraDiskSpace=${{ inputs.extraDiskSpace }}
         export PATH=$PATH:/sbin
+
+        [ -f $originalImagePath ] || echo 1>&2 "ERROR: image file not found at $originalImagePath"
+        [ "$partitionIndex" -ge 1 ] || echo 1>&2 "ERROR: partition index must be greater than or equal to 1"
+        [ "$extraDiskSpace" -ge 0 ] || echo 1>&2 "ERROR: extra disk space must be greater than or equal to 0"
 
         imagePath=$originalImagePath
         if [ "${extraDiskSpace}" -ne 0 ]; then
