@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOWNLOAD_URL: "https://downloads.raspberrypi.org/raspios_lite_armhf/images/raspios_lite_armhf-2023-05-03/2023-05-03-raspios-bullseye-armhf-lite.img.xz"
+  DOWNLOAD_URL: "https://downloads.raspberrypi.org/raspios_armhf/images/raspios_armhf-2024-03-15/2024-03-15-raspios-bookworm-armhf.img.xz"
   MOUNT_POINT: "/tmp/rpi-os"
   PACKAGES_FOLDER: "packages"
 
@@ -47,7 +47,7 @@ jobs:
           EOF
 
       - name: Upload updated OS image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: image
           path: |
